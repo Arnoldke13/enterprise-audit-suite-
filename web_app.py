@@ -14,11 +14,7 @@ st.set_page_config(page_title="Zipped LedgerGuard Pro", layout="wide")
 # ==========================================
 # 1. PASSWORD SECURITY GATE
 # ==========================================
-VALID_ACCESS_CODES = {
-    "ADMIN2026": "Master Admin",
-    "CLIENT-01": "Apex Supplies Ltd",
-    "VIP-AUDIT": "Premium Client"
-}
+VALID_ACCESS_CODES = dict(st.secrets["access_codes"])
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
