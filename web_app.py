@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import streamlit as st
 import pandas as pd
@@ -6,13 +7,13 @@ from math_auditor import audit_invoice
 from compliance_auditor import audit_compliance
 from duplicate_detector import check_duplicates
 from organizer import save_report
+from merger_engine import clean_and_merge
 
-st.set_page_config(page_title="Enterprise Audit Suite", layout="wide")
+st.set_page_config(page_title="Zipped LedgerGuard Pro", layout="wide")
 
 # ==========================================
 # 1. PASSWORD SECURITY GATE
 # ==========================================
-# Add or remove client access codes here anytime
 VALID_ACCESS_CODES = {
     "ADMIN2026": "Master Admin",
     "CLIENT-01": "Apex Supplies Ltd",
@@ -24,9 +25,9 @@ if "authenticated" not in st.session_state:
     st.session_state["client_label"] = ""
 
 if not st.session_state["authenticated"]:
-    st.title("Enterprise Audit & Compliance Suite")
-    st.subheader("Authorized Client Access Only")
-    st.write("Please enter your licensed access code to unlock the audit engine.")
+    st.title("Zipped LedgerGuard Pro")
+    st.subheader("Unified Financial Consolidation & Compliance Audit Suite")
+    st.write("Enter your licensed access code to unlock the platform.")
 
     entered_code = st.text_input("Access Code", type="password")
     if st.button("Unlock System"):
@@ -36,10 +37,10 @@ if not st.session_state["authenticated"]:
             st.rerun()
         else:
             st.error("Invalid Access Code. Contact the system administrator to purchase a license.")
-    st.stop()  # Stops the rest of the app from loading until unlocked!
+    st.stop()
 
 # ==========================================
-# 2. DYNAMIC RULES ENGINE (UNLOCKED)
+# 2. DYNAMIC RULES ENGINE
 # ==========================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "rules_config.json")
@@ -88,17 +89,16 @@ def to_clean_float(val):
     except ValueError:
         return 0.0
 
-st.title("Dynamic Enterprise Audit & Compliance Suite")
-st.caption(f"Licensed Session: {st.session_state['client_label']}")
+st.title("Zipped LedgerGuard Pro")
+st.caption(f"Unified Consolidation & Audit Suite | Licensed Session: {st.session_state['client_label']}")
 
-# Logout button in sidebar
 if st.sidebar.button("Lock / Log Out"):
     st.session_state["authenticated"] = False
     st.rerun()
 
 rules = load_rules()
 
-# 3. Sidebar: Client Branding & Dynamic Profiles
+# Sidebar: Client Branding & Dynamic Profiles
 st.sidebar.header("1. Client Branding & Profile")
 client_name = st.sidebar.text_input("Client Company Name", value="Acme Enterprises Ltd")
 selected_preset = st.sidebar.selectbox("Select Company Profile", list(rules.keys()))
@@ -125,79 +125,123 @@ with st.sidebar.expander("Save Upgrade as New Profile"):
         st.sidebar.success(f"Saved '{new_profile_name}'!")
         st.rerun()
 
-# 4. Upload File & Case-Insensitive Column Auto-Detection
-file = st.file_uploader("Upload Client Ledger (Excel or CSV)", type=["xlsx", "csv"])
+# ==========================================
+# 3. TWO-TAB UNIFIED WORKFLOW
+# ==========================================
+tab1, tab2 = st.tabs(["1. Multi-File Ledger Merger", "2. Enterprise Audit & Compliance"])
 
-if file:
-    df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
-    cols = list(df.columns)
-    lower_cols = [str(c).lower().strip().replace(" ", "_") for c in cols]
+# --- TAB 1: MERGER ---
+with tab1:
+    st.subheader("Combine & Standardize Multiple Branch Ledgers")
+    drop_dups = st.checkbox("Auto-Remove Exact Duplicate Rows During Merge", value=True)
+    uploaded_files = st.file_uploader(
+        "Select Multiple Branch Files (Excel or CSV)",
+        type=["xlsx", "csv"],
+        accept_multiple_files=True,
+        key="merger_uploader"
+    )
 
-    def find_col(targets, offset=0):
-        for t in targets:
-            if t in lower_cols:
-                return lower_cols.index(t) + offset
-        return 0
+    if uploaded_files and st.button("Merge & Clean All Files"):
+        master_df, total_raw, dups_removed = clean_and_merge(uploaded_files, remove_duplicates=drop_dups)
+        st.session_state["merged_master_df"] = master_df
 
-    with st.expander("Match Client Columns (Auto-detected — click to adjust)", expanded=False):
         c1, c2, c3 = st.columns(3)
-        col_vendor = c1.selectbox("Vendor Column", cols, index=find_col(["vendor", "supplier", "vendor_name", "supplier_name"]))
-        col_pin = c2.selectbox("Tax PIN Column", ["None"] + cols, index=find_col(["tax_pin", "pin", "kra_pin", "vat_pin"], 1))
-        col_sub = c3.selectbox("Sub-Total Column", cols, index=find_col(["sub_total", "subtotal", "net_amount", "amount"]))
-        
-        c4, c5, c6 = st.columns(3)
-        col_tax = c4.selectbox("Tax Amount Column", cols, index=find_col(["tax_amount", "tax", "vat", "vat_amount"]))
-        col_total = c5.selectbox("Claimed Total Column", cols, index=find_col(["claimed_total", "total", "gross_total", "grand_total"]))
-        col_code = c6.selectbox("Approval Code Column", ["None"] + cols, index=find_col(["approval_code", "approval_id", "auth_code"], 1))
+        c1.metric("Files Merged", len(uploaded_files))
+        c2.metric("Clean Master Rows", len(master_df))
+        c3.metric("Duplicates Removed", dups_removed)
 
-    if st.button("Run Full Audit"):
-        results = []
-        for _, r in df.iterrows():
-            pin_val = "" if (col_pin == "None" or not require_pin or pd.isna(r[col_pin])) else str(r[col_pin]).strip()
-            code_val = "" if (col_code == "None" or pd.isna(r[col_code])) else str(r[col_code]).strip()
+        st.dataframe(master_df, use_container_width=True)
 
-            sub_val = to_clean_float(r[col_sub])
-            tax_val = to_clean_float(r[col_tax])
-            tot_val = to_clean_float(r[col_total])
+        buffer = io.BytesIO()
+        master_df.to_excel(buffer, index=False, engine="openpyxl")
+        merged_name = f"{client_name.strip().replace(' ', '_')}_Master_Ledger.xlsx"
 
-            res = audit_invoice(
-                str(r[col_vendor]),
-                pin_val,
-                sub_val,
-                tax_val,
-                tot_val,
-                min_pin_length=min_pin_len
-            )
-            res["Compliance"] = audit_compliance(
-                sub_val,
-                tax_val,
-                code_val,
-                vat_rate=vat_rate,
-                approval_limit=approval_limit
-            )
-            results.append(res)
+        st.download_button(
+            label=f"Download {merged_name}",
+            data=buffer.getvalue(),
+            file_name=merged_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        st.info("Merged data is ready! Switch to Tab 2 ('Enterprise Audit & Compliance') to audit this master file immediately.")
 
-        if check_dups:
-            results = check_duplicates(results)
+# --- TAB 2: AUDITOR ---
+with tab2:
+    st.subheader("Automated Math, Tax PIN & Compliance Audit")
+    data_source = st.radio(
+        "Choose Ledger Source",
+        ["Upload a Single File", "Use Merged Master Ledger from Tab 1"],
+        horizontal=True
+    )
+
+    df = None
+    if data_source == "Upload a Single File":
+        single_file = st.file_uploader("Upload Client Ledger (Excel or CSV)", type=["xlsx", "csv"], key="audit_uploader")
+        if single_file:
+            df = pd.read_csv(single_file) if single_file.name.endswith(".csv") else pd.read_excel(single_file)
+    else:
+        if "merged_master_df" in st.session_state:
+            df = st.session_state["merged_master_df"]
+            st.success(f"Loaded {len(df)} merged rows from Tab 1!")
         else:
-            for item in results:
-                item["Duplicate"] = "SKIPPED"
+            st.warning("No merged file in memory yet. Merge files in Tab 1 first or select 'Upload a Single File'.")
 
-        clean_filename = f"{client_name.strip().replace(' ', '_')}_Audit_Report.xlsx"
-        clean, flagged, saved_money = save_report(results, client_name=client_name, output_file=clean_filename)
+    if df is not None:
+        cols = list(df.columns)
+        lower_cols = [str(c).lower().strip().replace(" ", "_") for c in cols]
 
-        st.subheader(f"Audit Summary: {client_name}")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Clean Invoices", clean)
-        col2.metric("Flagged Errors", flagged)
-        col3.metric("Flagged Value At Risk", f"{saved_money:,.2f}")
+        def find_col(targets, offset=0):
+            for t in targets:
+                if t in lower_cols:
+                    return lower_cols.index(t) + offset
+            return 0
 
-        st.dataframe(pd.DataFrame(results), use_container_width=True)
+        with st.expander("Match Client Columns (Auto-detected — click to adjust)", expanded=False):
+            c1, c2, c3 = st.columns(3)
+            col_vendor = c1.selectbox("Vendor Column", cols, index=find_col(["vendor", "supplier", "vendor_name", "supplier_name"]))
+            col_pin = c2.selectbox("Tax PIN Column", ["None"] + cols, index=find_col(["tax_pin", "pin", "kra_pin", "vat_pin"], 1))
+            col_sub = c3.selectbox("Sub-Total Column", cols, index=find_col(["sub_total", "subtotal", "net_amount", "amount"]))
+            
+            c4, c5, c6 = st.columns(3)
+            col_tax = c4.selectbox("Tax Amount Column", cols, index=find_col(["tax_amount", "tax", "vat", "vat_amount"]))
+            col_total = c5.selectbox("Claimed Total Column", cols, index=find_col(["claimed_total", "total", "gross_total", "grand_total"]))
+            col_code = c6.selectbox("Approval Code Column", ["None"] + cols, index=find_col(["approval_code", "approval_id", "auth_code"], 1))
 
-        with open(clean_filename, "rb") as excel_file:
-            st.download_button(
-                label=f"Download {clean_filename}",
-                data=excel_file,
-                file_name=clean_filename,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        if st.button("Run Full Audit"):
+            results = []
+            for _, r in df.iterrows():
+                pin_val = "" if (col_pin == "None" or not require_pin or pd.isna(r[col_pin])) else str(r[col_pin]).strip()
+                code_val = "" if (col_code == "None" or pd.isna(r[col_code])) else str(r[col_code]).strip()
+
+                sub_val = to_clean_float(r[col_sub])
+                tax_val = to_clean_float(r[col_tax])
+                tot_val = to_clean_float(r[col_total])
+
+                res = audit_invoice(
+                    str(r[col_vendor]),
+                    pin_val,
+                    sub_val,
+                    tax_val,
+                    tot_val,
+                    min_pin_length=min_pin_len
+                )
+                res["Compliance"] = audit_compliance(
+                    sub_val,
+                    tax_val,
+                    code_val,
+                    vat_rate=vat_rate,
+                    approval_limit=approval_limit
+                )
+                results.append(res)
+
+            if check_dups:
+                results = check_duplicates(results)
+            else:
+                for item in results:
+                    item["Duplicate"] = "SKIPPED"
+
+            clean_filename = f"{client_name.strip().replace(' ', '_')}_Audit_Report.xlsx"
+            clean, flagged, saved_money = save_report(results, client_name=client_name, output_file=clean_filename)
+
+            st.subheader(f"Audit Summary: {client_name}")
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Clean Invoices", clean)
