@@ -1,3 +1,0 @@
-streamlit
-open pandas
-open pyxl
