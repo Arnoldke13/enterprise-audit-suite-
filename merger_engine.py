@@ -6,13 +6,13 @@ def clean_and_merge(file_list, remove_duplicates=True):
     for file in file_list:
         df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
         
-        # Drop completely empty columns (like Unnamed: 0)
+        # Drop completely empty columns (such as Unnamed: 0)
         df = df.loc[:, ~df.columns.astype(str).str.contains('^Unnamed', case=False)]
         
-        # Standardize column headers
+        # Standardize column headers to lowercase with underscores
         clean_cols = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
         
-        # Ensure every column name inside this file is unique
+        # Force every column name inside this file to be unique
         seen = {}
         unique_cols = []
         for col in clean_cols:
