@@ -210,37 +210,35 @@ with tab2:
             col_total = c5.selectbox("Claimed Total Column", cols, index=find_col(["claimed_total", "total", "gross_total", "grand_total"]))
             col_code = c6.selectbox("Approval Code Column", ["None"] + cols, index=find_col(["approval_code", "approval_id", "auth_code"], 1))
 
-        if st.button("Run Full Audit"):
-            results = []
-            for _, r in df.iterrows():
-                pin_val = "" if (col_pin == "None" or not require_pin or pd.isna(r[col_pin])) else str(r[col_pin]).strip()
-                code_val = "" if (col_code == "None" or pd.isna(r[col_code])) else str(r[col_code]).strip()
+        if st.button("Run Full Audit", type="primary"):
+            try:
+                results = []
+                for _, r in df.iterrows():
+                    pin_val = "" if (col_pin == "None" or not require_pin or pd.isna(r[col_pin])) else str(r[col_pin]).strip()
+                    code_val = "" if (col_code == "None" or pd.isna(r[col_code])) else str(r[col_code]).strip()
 
-                sub_val = to_clean_float(r[col_sub])
-                tax_val = to_clean_float(r[col_tax])
-                tot_val = to_clean_float(r[col_total])
+                    sub_val = to_clean_float(r[col_sub])
+                    tax_val = to_clean_float(r[col_tax])
+                    tot_val = to_clean_float(r[col_total])
 
-                res = audit_invoice(
-                    str(r[col_vendor]),
-                    pin_val,
-                    sub_val,
-                    tax_val,
-                    tot_val,
-                    min_pin_length=min_pin_len
-                )
-                res["Compliance"] = audit_compliance(
-                    sub_val,
-                    tax_val,
-                    code_val,
-                    vat_rate=vat_rate,
-                    approval_limit=approval_limit
-                )
-                results.append(res)
+                    res = audit_invoice(
+                        str(r[col_vendor]),
+                        pin_val,
+                        sub_val,
+                        tax_val,
+                        tot_val,
+                        min_pin_length=min_pin_len
+                    )
+                    res["Compliance"] = audit_compliance(
+                        sub_val,
+                        tax_val,
+                        code_val,
+                        vat_rate=vat_rate,
+                        approval_limit=approval_limit
+                    )
+                    results.append(res)
 
-            if check_dups:
-                results = check_duplicates(results)
-            else:
-                for item in results:
-                    item["Duplicate"] = "SKIPPED"
-
-            clean_filename = f"{client_name.strip().replace(' ', '_')}_Audit_Report.xlsx"
+                if check_dups:
+                    results = check_duplicates(results)
+                else:
+                    for item in results:
