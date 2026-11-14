@@ -239,4 +239,39 @@ with tab2:
                     results.append(res)
 
                 results = check_duplicates(results) if check_dups else [dict(item, Duplicate="SKIPPED") for item in results]
+                clean_filename = f"{client_name.strip().replace(' ', '_')}_Audit_Report.xlsx"
+                clean, flagged, saved_money = save_report(results, client_name=client_name, output_file=clean_filename)
+
+                with open(clean_filename, "rb") as f:
+                    excel_bytes = f.read()
+
+                st.session_state["audit_payload"] = {
+                    "client_name": client_name,
+                    "clean": clean,
+                    "flagged": flagged,
+                    "saved_money": saved_money,
+                    "results_df": pd.DataFrame(results),
+                    "excel_bytes": excel_bytes,
+                    "filename": clean_filename
+                }
+            except Exception as e:
+                st.error(f"Audit Error: {e}")
+
+    if "audit_payload" in st.session_state:
+        data = st.session_state["audit_payload"]
+        st.divider()
+        st.subheader(f"Audit Summary: {data['client_name']}")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Clean Invoices", data["clean"])
+        col2.metric("Flagged Errors", data["flagged"])
+        col3.metric("Flagged Value At Risk", f"{data['saved_money']:,.2f}")
+
+        st.dataframe(data["results_df"], width="stretch")
+
+        st.download_button(
+            label=f"Download {data['filename']}",
+            data=data["excel_bytes"],
+            file_name=data["filename"],
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
