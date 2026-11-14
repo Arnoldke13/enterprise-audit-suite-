@@ -5,7 +5,26 @@ def clean_and_merge(file_list, remove_duplicates=True):
     
     for file in file_list:
         df = pd.read_csv(file) if file.name.endswith(".csv") else pd.read_excel(file)
-        df.columns = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+        
+        # Drop completely empty columns (like Unnamed: 0)
+        df = df.loc[:, ~df.columns.astype(str).str.contains('^Unnamed', case=False)]
+        
+        # Standardize column headers
+        clean_cols = [str(c).strip().lower().replace(" ", "_") for c in df.columns]
+        
+        # Ensure every column name inside this file is unique
+        seen = {}
+        unique_cols = []
+        for col in clean_cols:
+            if col in seen:
+                seen[col] += 1
+                unique_cols.append(f"{col}_{seen[col]}")
+            else:
+                seen[col] = 0
+                unique_cols.append(col)
+        df.columns = unique_cols
+        
+        # Drop completely empty rows and tag source file
         df = df.dropna(how="all").copy()
         df["source_file"] = file.name
         all_frames.append(df)
