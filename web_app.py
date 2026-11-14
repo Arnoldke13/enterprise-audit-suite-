@@ -238,8 +238,5 @@ with tab2:
                     )
                     results.append(res)
 
-                             if check_dups:
-                 results = check_duplicates(results)
-             else:
-                 [item.update({"Duplicate": "SKIPPED"}) for item in results]
+                results = check_duplicates(results) if check_dups else [dict(item, Duplicate="SKIPPED") for item in results]
 
